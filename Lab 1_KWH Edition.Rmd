@@ -1,0 +1,144 @@
+---
+title: "Lab 1_KWH Version"
+author: "Kynan Witters Hicks"
+date: "January 10, 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r library}
+
+library(tidyverse) #Collection of data wrangling and visualization
+library(sf)
+library(leaflet)
+library(tmap)
+```
+
+2. Review: reading, exploring, wrangling, and visulaizing data
+
+a. Read in data
+```{r}
+wine <- read_csv("wine_data.csv")
+```
+
+b.Wrangling
+```{r}
+
+wine_new <- wine %>%
+  select(country, province, winery, region_1, points, price) %>% 
+  rename(state = province) %>% #stuck
+  filter(state == "California" | state =="Oregon" | state == "Washington" ) %>%  
+  mutate(ppd = points/price) %>% 
+  arrange(-ppd) 
+  
+  
+  #31: if put a minus sign in any of columns it means exclude column
+  #32:"=" sets equal and "==" searches for a match
+  #33: "|" means or
+  #35: sorts by column decending
+```
+
+c. Use group_by() and summarize() to find summary statistics by group
+```{r}
+
+wine_summary <- wine_new %>% 
+  group_by(state) %>% 
+  summarize(
+    mean_ppd = mean(ppd, na.rm = TRUE), 
+    max_ppd = max(ppd, na.rm = TRUE)
+  )
+
+#48: Recognize every unique level and have those levels operate as unique groups
+#50: "mean_ppd" is column name and "na.rm" is remove NA
+#You can also group by more than one variable - group_by(state, type)
+```
+
+d. A few gg-graphics
+```{r}
+
+#anytime doing stat analysis create a histogram 
+#always tell ggplot what data is and what x and y variables are and what type of graph we want to create
+
+wine_hists <- ggplot(wine_new, aes(x = ppd)) +
+  geom_histogram(aes(fill = state)) +
+  facet_wrap(~state, scales = "free")
+
+wine_hists
+
+#66: always need to have "aes" if want to create fill based on variable
+#67: split up as a function of (~) state. "Scales = free" sets independent scales for each graph
+
+```
+
+new graph: scatterplot graph of price vs points, with color determined by state, adding a linear model trendline on top of it
+
+```{r}
+
+wine_points <- ggplot(wine_new, aes(x = price, y = points)) + 
+  geom_point(aes(color = state), alpha = 0.5) +
+  geom_smooth(color = "black", method = "lm", se = FALSE) +
+  scale_color_manual(values = c("royalblue",  "mediumorchid1", "orange")) +
+  facet_wrap(~state) +
+  theme_light()
+
+wine_points
+
+#geom_point use "color"" while geom_histogram use "fill"" for color
+#82: override default colors
+```
+
+2. California counties (spatial data) using sf
+
+sf is catching up to spatial data analysis in other programs quickly 
+```{r}
+
+ca_counties <- st_read(dsn = ".", layer = "CA_Counties_TIGER2016")
+
+#plot(ca_counties)
+
+#98: st_read is for spacial/temporal. "." means "we're already there"
+#sf uses dataset as normal data frame and the geometry just sticks to it! This is why it's so cool. 
+
+ca_land <- ca_counties %>% 
+  select(NAME, ALAND)
+
+ca_pop_inc <- read.csv("ca_pop_inc.csv") %>% 
+  rename(NAME = COUNTY)
+
+#we want to join the ca_pop_inc file to our spatial ca_counties files
+#109: reanames COUNTY coloumn to NAME so that we can match columns in two datasets 
+
+ca_df <- full_join(ca_land, ca_pop_inc) %>% 
+  select(NAME, MedFamilyIncome)
+
+#114: full_join is safest bet over "join" function because won't get rid of anything
+
+
+```
+
+d. Use geom_sf to make a map in ggplot
+
+```{r}
+
+ca_income <- ggplot(ca_df) + 
+  geom_sf(aes(fill = MedFamilyIncome))
+
+ca_income
+
+#Now we want to overlay on a different map using "leaflet" package but have to change coordinate system first
+
+ca_df_transform <- st_transform(ca_df, crs = 4326)
+
+#133: 4326 is the corrdinate reference system 
+
+leaflet(ca_df_transform) %>% 
+  addTiles() %>% 
+  addPolygons() 
+
+#leaflet creates interactive set of polygons in Viewer
+
+```
+
